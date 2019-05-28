@@ -13,7 +13,7 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 #}
-{{ task_id | to_var }} = dummy_operator.DummyOperator(
-    task_id={{ task_id | python_escape_string }},
-    trigger_rule={{ trigger_rule | python_escape_string }}
-)
+"gcloud dataproc jobs submit pig "
+"--cluster={{ '{{' }}params.configuration_properties['dataproc_cluster']{{ '}}' }} "
+"--region={{ '{{' }}params.configuration_properties['gcp_region']{{ '}}' }} "
+"--execute %s"

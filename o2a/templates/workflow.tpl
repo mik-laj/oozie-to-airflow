@@ -12,16 +12,18 @@
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
   See the License for the specific language governing permissions and
   limitations under the License.
- #}
+#}
 
 {% for dependency in dependencies %}
 {{ dependency }}
-{%- endfor %}
+{% endfor %}
 
-PARAMS = {{ params | tojson }}
+JOB_PROPERTIES={{ job_properties | python_escape_dictionary }}
+
+CONFIGURATION_PROPERTIES={{ configuration_properties | python_escape_dictionary }}
 
 with models.DAG(
-    {{ dag_name | tojson }},
+    {{ dag_name | python_escape_string }},
     schedule_interval={% if schedule_interval %}datetime.timedelta(days={{ schedule_interval }}){% else %}None{% endif %},  # Change to suit your needs
     start_date=dates.days_ago({{ start_days_ago }})  # Change to suit your needs
 ) as dag:
