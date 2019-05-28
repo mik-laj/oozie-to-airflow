@@ -15,7 +15,7 @@
 """Maps FS node to Airflow's DAG"""
 
 import shlex
-from typing import List, Optional, Set, Tuple
+from typing import List, Set, Tuple
 
 from xml.etree.ElementTree import Element
 
@@ -142,19 +142,23 @@ class FsMapper(ActionMapper):
         self.tasks = self.parse_tasks()
 
     def parse_tasks(self) -> List[Task]:
-        if not list(self.oozie_node):
+        """
+        Processes the nodes responsible for determining what operations are performed on the filesystem and
+        returns the tasks that suit them.
+        """
+        tasks: List[Task] = []
+        valid_operation_tags = FS_OPERATION_MAPPERS.keys()
+        operation_nodes = [node for node in self.oozie_node if node.tag in valid_operation_tags]
+        operation_nodes_count = len(operation_nodes)
+
+        for index, node in enumerate(operation_nodes):
+            task = self.parse_fs_operation(index, node, operation_nodes_count)
+            tasks.append(task)
+
+        if not tasks:
+            # Each mapper must return at least one task
             return [Task(task_id=self.name, template_name="dummy.tpl", trigger_rule=self.trigger_rule)]
 
-        tasks: List[Task] = []
-        index = 0
-        for node in self.oozie_node:
-            task = self.parse_fs_action(index, node)
-            if task is not None:
-                tasks.append(task)
-                index += 1
-            else:
-                # configuration node needs to be skipped
-                pass
         return tasks
 
     def to_tasks_and_relations(self) -> Tuple[List[Task], List[Relation]]:
@@ -171,18 +175,10 @@ class FsMapper(ActionMapper):
     def last_task_id(self) -> str:
         return self.tasks[-1].task_id
 
-    def parse_fs_action(self, index: int, node: Element) -> Optional[Task]:
+    def parse_fs_operation(self, index: int, node: Element, operation_nodes_count: int) -> Task:
         tag_name = node.tag
-        if tag_name not in FS_OPERATION_MAPPERS.keys():
-            # Skip nodes that are not FS mapper action nodes
-            return None
-        tasks_count = len(self.oozie_node)
-        task_id = self.name if tasks_count == 1 else f"{self.name}_fs_{index}_{tag_name}"
-        mapper_fn = FS_OPERATION_MAPPERS.get(tag_name)
-
-        if not mapper_fn:
-            raise Exception("Unknown FS operation: {}".format(tag_name))
-
+        task_id = self.name if operation_nodes_count == 1 else f"{self.name}_fs_{index}_{tag_name}"
+        mapper_fn = FS_OPERATION_MAPPERS[tag_name]
         pig_command = mapper_fn(node, property_set=self.property_set)
 
         return Task(
