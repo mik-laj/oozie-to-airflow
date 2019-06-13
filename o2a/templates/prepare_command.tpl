@@ -15,8 +15,8 @@
 #}
 "$DAGS_FOLDER/../data/prepare.sh "
 "-c %s -r %s "
-{% if delete is not none %}'-d %s'{% endif %}
-{% if mkdir is not none %}'-m %s'{% endif %} \
+{% if delete is not none %}'-d %s '{% endif %}
+{% if mkdir is not none %}'-m %s '{% endif %}
 % (CONFIG['dataproc_cluster'], CONFIG['gcp_region'],
  {% if delete is not none %}shlex.quote({{ delete | to_python }}),{% endif %}
  {% if mkdir is not none %}shlex.quote({{ mkdir | to_python }}),{% endif %}

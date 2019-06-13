@@ -54,7 +54,7 @@ def prepare_mkdir_command(node: Element, props: PropertySet):
 
 def prepare_delete_command(node: Element, props: PropertySet):
     path = normalize_path(node.attrib[FS_TAG_PATH], props=props)
-    command = "fs -rm -r {path}".format(path=shlex.quote(path))
+    command = "fs -rm -f -r {path}".format(path=shlex.quote(path))
 
     return command
 
@@ -183,6 +183,7 @@ class FsMapper(ActionMapper):
         return Task(
             task_id=task_id,
             template_name="fs_op.tpl",
+            trigger_rule=self.trigger_rule,
             template_params=dict(
                 pig_command=pig_command, action_node_properties=self.props.action_node_properties
             ),
