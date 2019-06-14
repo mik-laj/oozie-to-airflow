@@ -99,3 +99,38 @@ class TestSSHMapper(unittest.TestCase):
             props=PropertySet(job_properties=job_properties, config=config),
         )
         return mapper
+
+
+class TestSSHMapperELCommand(unittest.TestCase):
+    def setUp(self):
+        # language=XML
+        ssh_node_str = """
+<ssh>
+    <host>${hostname}</host>
+    <command>${concat("ls ", "-l")}</command>
+</ssh>
+"""
+        self.ssh_node = ET.fromstring(ssh_node_str)
+
+    def test_create_mapper_jinja(self):
+        # test jinja templating
+        job_properties = {"hostname": "user@apache.org"}
+
+        mapper = self._get_ssh_mapper(job_properties=job_properties, config={})
+        # make sure everything is getting initialized correctly
+        self.assertEqual("test_id", mapper.name)
+        self.assertEqual(TriggerRule.DUMMY, mapper.trigger_rule)
+        self.assertEqual(self.ssh_node, mapper.oozie_node)
+        self.assertEqual("user", mapper.user)
+        self.assertEqual("apache.org", mapper.host)
+        self.assertEqual('concat("ls ", "-l")', mapper.command)
+
+    def _get_ssh_mapper(self, job_properties, config):
+        mapper = ssh_mapper.SSHMapper(
+            oozie_node=self.ssh_node,
+            name="test_id",
+            dag_name="DAG_NAME_B",
+            trigger_rule=TriggerRule.DUMMY,
+            props=PropertySet(job_properties=job_properties, config=config),
+        )
+        return mapper

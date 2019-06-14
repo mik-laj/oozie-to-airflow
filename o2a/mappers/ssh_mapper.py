@@ -103,4 +103,5 @@ class SSHMapper(ActionMapper):
             "from airflow.utils import dates",
             "from airflow.contrib.operators import ssh_operator",
             "from airflow.contrib.hooks import ssh_hook",
+            "from o2a.o2a_libs.el_basic_functions import *",
         }
