@@ -95,6 +95,7 @@ class PigMapper(ActionMapper):
         destination_pig_file.write("set mapred.create.symlink yes;\n")
         if self.files:
             destination_pig_file.write("set mapred.cache.file {};\n".format(",".join(self.hdfs_files)))
+            destination_pig_file.write("set mapred.cache.files {};\n".format(",".join(self.hdfs_files)))
         if self.archives:
             destination_pig_file.write("set mapred.cache.archives {};\n".format(",".join(self.hdfs_archives)))
 

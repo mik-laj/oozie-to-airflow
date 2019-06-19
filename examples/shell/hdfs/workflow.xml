@@ -50,6 +50,7 @@
             </configuration>
             <exec>java</exec>
             <argument>-version</argument>
+            <file>/user/szymon/non-existent</file>
             <capture-output/> <!-- This can be ignored by the converter -->
         </shell>
         <ok to="end"/>

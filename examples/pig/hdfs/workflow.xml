@@ -60,6 +60,7 @@
             <file>/user/${userName}/${examplesRoot}/apps/pig/test_dir/test2.zip#test_link.zip</file>
             <archive>test_dir/test2.zip#test_zip_dir</archive>
             <archive>test_dir/test3.zip#test3_zip_dir</archive>
+            <archive>test_dir/testcopy.zip#testcopy_zip_dir</archive>
         </pig>
         <ok to="end"/>
         <error to="fail"/>

@@ -81,6 +81,7 @@
                 </property>
             </configuration>
             <file>/user/${userName}/${examplesRoot}/apps/mapreduce/lib/wordcount.jar</file>
+            <file>/user/${userName}/${examplesRoot}/apps/mapreduce/lib/test-file.txt#test-file-symlink.txt</file>
         </map-reduce>
         <ok to="end"/>
         <error to="fail"/>

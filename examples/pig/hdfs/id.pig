@@ -12,7 +12,18 @@
 --  See the License for the specific language governing permissions and
 --  limitations under the License.
 
-A = load '$INPUT' using PigStorage(':');
-B = foreach A generate $0 as id;
-store B into '$OUTPUT' USING PigStorage();
-dump B;
+--A = load '$INPUT' using PigStorage(':');
+--B = foreach A generate $0 as id;
+--store B into '$OUTPUT' USING PigStorage();
+--dump B;
+
+--sh cat test_link.txt
+sh find /tmp
+sh echo
+sh pwd
+sh echo
+sh sleep 1000
+sh ls -al
+sh echo
+sh cat ./test_zip_dir/test2.txt
+sh echo
