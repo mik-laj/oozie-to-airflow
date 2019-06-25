@@ -14,11 +14,14 @@
 # limitations under the License.
 """Class for parsed Oozie workflow node"""
 # noinspection PyPackageRequirements
+from itertools import chain
 from typing import List, Optional
-import logging
 
 from airflow.utils.trigger_rule import TriggerRule
 
+from o2a.converter.exceptions import O2AException
+from o2a.converter.task import Task
+from o2a.converter.relation import Relation
 from o2a.mappers.base_mapper import BaseMapper
 
 
@@ -26,9 +29,6 @@ class ParsedActionNode:
     """Class for parsed Oozie workflow node"""
 
     def __init__(self, mapper: BaseMapper, tasks=None, relations=None):
-        from o2a.converter.task import Task
-        from o2a.converter.relation import Relation
-
         self.mapper = mapper
         self.downstream_names: List[str] = []
         self.is_error: bool = False
@@ -36,6 +36,7 @@ class ParsedActionNode:
         self.error_xml: Optional[str] = None
         self.tasks: List[Task] = tasks or []
         self.relations: List[Relation] = relations or []
+        self.error_handler_task: Optional[Task] = None
 
     def add_downstream_node_name(self, node_name: str):
         """
@@ -73,45 +74,45 @@ class ParsedActionNode:
         return self.tasks[0].task_id
 
     @property
-    def last_task_id(self) -> str:
+    def last_task_id_of_ok_flow(self) -> str:
         """
         Returns task_id of last task in mapper
         """
         return self.tasks[-1].task_id
 
-    def update_trigger_rule(self):
+    @property
+    def last_task_id_of_error_flow(self) -> str:
         """
-        The trigger rule gets determined by if it is error or ok.
-
-        OK only -> TriggerRule.ONE_SUCCESS
-        ERROR only -> TriggerRule.ONE_FAILED
-        both -> TriggerRule.DUMMY and a warning log.
-        neither -> TriggerRule.DUMMY
-
-        Eventually this if it is both error and ok, then
-        we can extend it into two Airflow Operators where one
-        is a python branch operator, and make a decision there.
+        Returns task_id of last task in mapper
         """
-        if self.is_ok and self.is_error:
-            logging.warning(f"Task {self.mapper.name} is both an error node and a ok node.")
-            for task in self.tasks:
-                task.trigger_rule = TriggerRule.DUMMY
-        elif not self.is_ok and not self.is_error:
-            # Sets to dummy, but does not warn user about it.
-            for task in self.tasks:
-                task.trigger_rule = TriggerRule.DUMMY
-        elif self.is_ok:
-            for task in self.tasks:
-                task.trigger_rule = TriggerRule.ALL_SUCCESS
-        else:
-            for task in self.tasks:
-                task.trigger_rule = TriggerRule.ONE_FAILED
+        if not self.error_handler_task:
+            raise O2AException(
+                "Unsupported state. The Error handler task ID was requested before it was created."
+            )
+        return self.error_handler_task.task_id
+
+    def add_error_handler_if_needed(self):
+        if not self.error_xml:
+            return
+        task_id = self.mapper.name + "_error"
+        new_relations = (
+            Relation(from_task_id=t.task_id, to_task_id=task_id, is_error=True) for t in self.tasks
+        )
+        self.relations.extend(new_relations)
+        new_task = Task(task_id=task_id, template_name="dummy.tpl", trigger_rule=TriggerRule.ONE_FAILED)
+        self.error_handler_task = new_task
+
+    @property
+    def all_tasks(self):
+        if self.error_handler_task:
+            return chain(self.tasks, [self.error_handler_task])
+        return self.tasks
 
     def __repr__(self) -> str:
         return (
             f"ParsedActionNode(mapper={self.mapper}, "
             f"downstream_names={self.downstream_names}, "
-            f"is_error={self.is_error}, error_xml={self.error_xml}, "
+            f"error_xml={self.error_xml}, "
             f"tasks={self.tasks}, relations={self.relations})"
         )
 

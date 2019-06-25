@@ -177,7 +177,8 @@ class TestOozieConverter(TestCase):
         op4 = mock.Mock(
             **{
                 "first_task_id": "task4_first",
-                "last_task_id": "task4_last",
+                "last_task_id_of_ok_flow": "task4_last",
+                "last_task_id_of_error_flow": "task4_last",
                 "get_downstreams.return_value": ["task1", "task2", "task3"],
                 "get_error_downstream_name.return_value": "fail1",
             }
@@ -194,72 +195,35 @@ class TestOozieConverter(TestCase):
         workflow = self._create_workflow(nodes=op_dict)
         converter = self._create_converter()
         workflow.relations = set()
+        converter.add_error_handlers(workflow)
         converter.convert_relations(workflow)
 
         self.assertEqual(
             workflow.relations,
             {
-                Relation(from_task_id="task1", to_task_id="fail1", is_error=True),
-                Relation(from_task_id="task1", to_task_id="task2"),
-                Relation(from_task_id="task1", to_task_id="task3"),
-                Relation(from_task_id="task2", to_task_id="fail1", is_error=True),
-                Relation(from_task_id="task2", to_task_id="task3"),
-                Relation(from_task_id="task2", to_task_id="task4_first"),
-                Relation(from_task_id="task3", to_task_id="end1"),
-                Relation(from_task_id="task3", to_task_id="fail1", is_error=True),
+                Relation(from_task_id="task1", to_task_id="task2", is_error=False),
+                Relation(from_task_id="task1", to_task_id="task3", is_error=False),
+                Relation(from_task_id="task1_error", to_task_id="fail1", is_error=True),
+                Relation(from_task_id="task2", to_task_id="task3", is_error=False),
+                Relation(from_task_id="task2", to_task_id="task4_first", is_error=False),
+                Relation(from_task_id="task2_error", to_task_id="fail1", is_error=True),
+                Relation(from_task_id="task3", to_task_id="end1", is_error=False),
+                Relation(from_task_id="task3_error", to_task_id="fail1", is_error=True),
                 Relation(from_task_id="task4_last", to_task_id="fail1", is_error=True),
-                Relation(from_task_id="task4_last", to_task_id="task1"),
-                Relation(from_task_id="task4_last", to_task_id="task2"),
-                Relation(from_task_id="task4_last", to_task_id="task3"),
+                Relation(from_task_id="task4_last", to_task_id="task1", is_error=False),
+                Relation(from_task_id="task4_last", to_task_id="task2", is_error=False),
+                Relation(from_task_id="task4_last", to_task_id="task3", is_error=False),
             },
         )
 
-    def test_update_trigger_rules(self):
-        oozie_node = ET.Element("dummy")
-        op1 = parsed_action_node.ParsedActionNode(
-            dummy_mapper.DummyMapper(oozie_node=oozie_node, name="task1", dag_name="DAG_NAME_B"),
-            tasks=[self._create_task("task1")],
-        )
-        op1.downstream_names = ["task2", "task3"]
-        op1.error_xml = "fail1"
-        op2 = parsed_action_node.ParsedActionNode(
-            dummy_mapper.DummyMapper(oozie_node=oozie_node, name="task2", dag_name="DAG_NAME_B"),
-            tasks=[self._create_task("task2")],
-        )
-        op2.downstream_names = ["task3"]
-        op2.error_xml = "fail1"
-        op3 = parsed_action_node.ParsedActionNode(
-            dummy_mapper.DummyMapper(oozie_node=oozie_node, name="task3", dag_name="DAG_NAME_B"),
-            tasks=[self._create_task("task3")],
-        )
-        op3.downstream_names = ["end1"]
-        op3.error_xml = "fail1"
-        end = parsed_action_node.ParsedActionNode(
-            dummy_mapper.DummyMapper(oozie_node=oozie_node, name="end1", dag_name="DAG_NAME_B"),
-            tasks=[self._create_task("end1")],
-        )
-        fail = parsed_action_node.ParsedActionNode(
-            dummy_mapper.DummyMapper(oozie_node=oozie_node, name="fail1", dag_name="DAG_NAME_B"),
-            tasks=[self._create_task("fail1")],
-        )
-        op_dict = {"task1": op1, "task2": op2, "task3": op3, "end1": end, "fail1": fail}
-        workflow = self._create_workflow(nodes=op_dict)
+    def test_add_error_handlers(self):
+        nodes = {"TASK_A": mock.MagicMock(), "TASK_B": mock.MagicMock()}
         converter = self._create_converter()
+        workflow = self._create_workflow(nodes)
+        converter.add_error_handlers(workflow)
 
-        workflow.relations = set()
-        converter.convert_relations(workflow)
-        converter.update_trigger_rules(workflow)
-
-        self.assertFalse(op1.is_ok)
-        self.assertFalse(op1.is_error)
-        self.assertTrue(op2.is_ok)
-        self.assertFalse(op2.is_error)
-        self.assertTrue(op3.is_ok)
-        self.assertFalse(op2.is_error)
-        self.assertTrue(end.is_ok)
-        self.assertFalse(end.is_error)
-        self.assertFalse(fail.is_ok)
-        self.assertTrue(fail.is_error)
+        nodes["TASK_A"].add_error_handler_if_needed.assert_called_once_with()
+        nodes["TASK_B"].add_error_handler_if_needed.assert_called_once_with()
 
     @staticmethod
     def _create_converter():

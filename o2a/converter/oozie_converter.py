@@ -100,11 +100,11 @@ class OozieConverter:
         workflow = self.parser.workflow
 
         self.apply_transformers(workflow)
-
         self.convert_nodes(workflow.nodes)
-        self.update_trigger_rules(workflow)
 
+        self.add_error_handlers(workflow)
         self.convert_relations(workflow)
+
         self.convert_dependencies(workflow)
 
         if as_subworkflow:
@@ -139,32 +139,24 @@ class OozieConverter:
         for p_node in workflow.nodes.values():
             for downstream in p_node.get_downstreams():
                 relation = Relation(
-                    from_task_id=p_node.last_task_id, to_task_id=workflow.nodes[downstream].first_task_id
+                    from_task_id=p_node.last_task_id_of_ok_flow,
+                    to_task_id=workflow.nodes[downstream].first_task_id,
                 )
                 workflow.relations.add(relation)
             error_downstream = p_node.get_error_downstream_name()
             if error_downstream:
                 relation = Relation(
-                    from_task_id=p_node.last_task_id,
+                    from_task_id=p_node.last_task_id_of_error_flow,
                     to_task_id=workflow.nodes[error_downstream].first_task_id,
                     is_error=True,
                 )
                 workflow.relations.add(relation)
 
     @staticmethod
-    def update_trigger_rules(workflow: Workflow) -> None:
-        logging.info("Updating trigger rules.")
+    def add_error_handlers(workflow: Workflow) -> None:
+        logging.info("Adding error handlers")
         for node in workflow.nodes.values():
-            # If a task is referenced  by an "ok to=<task>", flip bit in parsed
-            # node class
-            for downstream in node.get_downstreams():
-                workflow.nodes[downstream].is_ok = True
-            error_name = node.get_error_downstream_name()
-            if error_name:
-                # If a task is referenced  by an "error to=<task>", flip
-                # corresponding bit in the parsed node class
-                workflow.nodes[error_name].is_error = True
-            node.update_trigger_rule()
+            node.add_error_handler_if_needed()
 
     def read_config_replace_el(self):
         """

@@ -39,25 +39,12 @@
     {% endif %}
 {%- endmacro %}
 
-{% macro node_color(node) -%}
-    {% if node.is_ok and node.is_error %}
-        blue
-    {% elif node.is_ok %}
-        green
-    {% elif node.is_error %}
-        red
-    {% else %}
-        black
-    {% endif %}
-{%- endmacro %}
-
 digraph {
     label="{{ dag_name }}";
     {% for node in nodes %}
         subgraph cluster_{{ node.name | to_var }} {
             label="{{ node.name }}"
-            color={{ node_color(node) }}
-            {% for task in node.tasks %}
+            {% for task in node.all_tasks %}
                 {{ task.task_id | to_var }}
                 [color={{ task_color(task) }}]
                 [shape=none]
