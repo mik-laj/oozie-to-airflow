@@ -21,6 +21,22 @@
     {% endif %}
 {%- endmacro %}
 
+{% macro node_relation_label(relation) %}
+    {% if relation.is_error %}
+        <error/>
+    {% else %}
+        <ok/>
+    {% endif %}
+{%- endmacro %}
+
+{% macro inner_relation_label(relation) %}
+    {% if relation.is_error %}
+        on error
+    {% else %}
+        on success
+    {% endif %}
+{%- endmacro %}
+
 {% macro task_color(task) -%}
     {% if task.trigger_rule == 'all_success' %}
         darkgreen
@@ -66,12 +82,16 @@ digraph {
                 >]
             {% endfor %}
             {% for relation in node.relations %}
-                {{ relation.from_task_id | to_var }} -> {{ relation.to_task_id | to_var }} [color={{ relation_color(relation) }}]
+                {{ relation.from_task_id | to_var }} -> {{ relation.to_task_id | to_var }}
+                [color={{ relation_color(relation) }}]
+                [label="{{ inner_relation_label(relation) }}"]
             {% endfor %}
         }
     {% endfor %}
 
     {% for relation in relations %}
-        {{ relation.from_task_id | to_var }} -> {{ relation.to_task_id | to_var }} [color={{ relation_color(relation) }}]
+        {{ relation.from_task_id | to_var }} -> {{ relation.to_task_id | to_var }}
+        [label="{{ node_relation_label(relation) }}"]
+        [color={{ relation_color(relation) }}]
     {% endfor %}
 }
