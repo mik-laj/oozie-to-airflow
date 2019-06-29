@@ -53,7 +53,7 @@ class TestParserNodeMultipleOperators(unittest.TestCase):
         op1.name = "TASK"
         p_node = parsed_action_node.ParsedActionNode(op1, tasks=self._get_tasks())
         p_node.error_xml = "AAAA"
-        p_node.add_error_handler_if_needed()
+        p_node.add_state_handler_if_needed()
         self.assertEqual("TASK_error", p_node.last_task_id_of_error_flow)
 
     def test_last_task_id_of_ok_flow(self):

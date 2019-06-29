@@ -102,7 +102,7 @@ class OozieConverter:
         self.apply_transformers(workflow)
         self.convert_nodes(workflow.nodes)
 
-        self.add_error_handlers(workflow)
+        self.add_state_handlers(workflow)
         self.convert_relations(workflow)
 
         self.convert_dependencies(workflow)
@@ -153,10 +153,10 @@ class OozieConverter:
                 workflow.relations.add(relation)
 
     @staticmethod
-    def add_error_handlers(workflow: Workflow) -> None:
+    def add_state_handlers(workflow: Workflow) -> None:
         logging.info("Adding error handlers")
         for node in workflow.nodes.values():
-            node.add_error_handler_if_needed()
+            node.add_state_handler_if_needed()
 
     def read_config_replace_el(self):
         """

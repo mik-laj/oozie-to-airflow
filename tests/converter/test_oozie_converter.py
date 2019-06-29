@@ -195,20 +195,20 @@ class TestOozieConverter(TestCase):
         workflow = self._create_workflow(nodes=op_dict)
         converter = self._create_converter()
         workflow.relations = set()
-        converter.add_error_handlers(workflow)
+        converter.add_state_handlers(workflow)
         converter.convert_relations(workflow)
 
         self.assertEqual(
             workflow.relations,
             {
-                Relation(from_task_id="task1", to_task_id="task2", is_error=False),
-                Relation(from_task_id="task1", to_task_id="task3", is_error=False),
                 Relation(from_task_id="task1_error", to_task_id="fail1", is_error=True),
-                Relation(from_task_id="task2", to_task_id="task3", is_error=False),
-                Relation(from_task_id="task2", to_task_id="task4_first", is_error=False),
+                Relation(from_task_id="task1_ok", to_task_id="task2", is_error=False),
+                Relation(from_task_id="task1_ok", to_task_id="task3", is_error=False),
                 Relation(from_task_id="task2_error", to_task_id="fail1", is_error=True),
-                Relation(from_task_id="task3", to_task_id="end1", is_error=False),
+                Relation(from_task_id="task2_ok", to_task_id="task3", is_error=False),
+                Relation(from_task_id="task2_ok", to_task_id="task4_first", is_error=False),
                 Relation(from_task_id="task3_error", to_task_id="fail1", is_error=True),
+                Relation(from_task_id="task3_ok", to_task_id="end1", is_error=False),
                 Relation(from_task_id="task4_last", to_task_id="fail1", is_error=True),
                 Relation(from_task_id="task4_last", to_task_id="task1", is_error=False),
                 Relation(from_task_id="task4_last", to_task_id="task2", is_error=False),
@@ -220,10 +220,10 @@ class TestOozieConverter(TestCase):
         nodes = {"TASK_A": mock.MagicMock(), "TASK_B": mock.MagicMock()}
         converter = self._create_converter()
         workflow = self._create_workflow(nodes)
-        converter.add_error_handlers(workflow)
+        converter.add_state_handlers(workflow)
 
-        nodes["TASK_A"].add_error_handler_if_needed.assert_called_once_with()
-        nodes["TASK_B"].add_error_handler_if_needed.assert_called_once_with()
+        nodes["TASK_A"].add_state_handler_if_needed.assert_called_once_with()
+        nodes["TASK_B"].add_state_handler_if_needed.assert_called_once_with()
 
     @staticmethod
     def _create_converter():

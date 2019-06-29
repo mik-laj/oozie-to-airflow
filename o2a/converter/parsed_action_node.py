@@ -14,7 +14,6 @@
 # limitations under the License.
 """Class for parsed Oozie workflow node"""
 # noinspection PyPackageRequirements
-from itertools import chain
 from typing import List, Optional
 
 from airflow.utils.trigger_rule import TriggerRule
@@ -37,6 +36,7 @@ class ParsedActionNode:
         self.tasks: List[Task] = tasks or []
         self.relations: List[Relation] = relations or []
         self.error_handler_task: Optional[Task] = None
+        self.ok_handler_task: Optional[Task] = None
 
     def add_downstream_node_name(self, node_name: str):
         """
@@ -78,6 +78,8 @@ class ParsedActionNode:
         """
         Returns task_id of last task in mapper
         """
+        if self.ok_handler_task:
+            return self.ok_handler_task.task_id
         return self.tasks[-1].task_id
 
     @property
@@ -91,22 +93,46 @@ class ParsedActionNode:
             )
         return self.error_handler_task.task_id
 
-    def add_error_handler_if_needed(self):
+    def add_state_handler_if_needed(self):
+        """
+        Add additional tasks and relations to handle error and ok flow.
+
+        If the error path is specified, additional relations and task are added to handle
+        the error state.
+        If the error path and the ok path is specified, additional relations and task are added
+        to handle the ok path and the error path.
+        If the error path and the ok path is not-specified, no action is performed.
+        """
         if not self.error_xml:
             return
-        task_id = self.mapper.name + "_error"
+        error_handler_task_id = self.mapper.name + "_error"
+        error_handler = Task(
+            task_id=error_handler_task_id, template_name="dummy.tpl", trigger_rule=TriggerRule.ONE_FAILED
+        )
+        self.error_handler_task = error_handler
         new_relations = (
-            Relation(from_task_id=t.task_id, to_task_id=task_id, is_error=True) for t in self.tasks
+            Relation(from_task_id=t.task_id, to_task_id=error_handler_task_id, is_error=True)
+            for t in self.tasks
         )
         self.relations.extend(new_relations)
-        new_task = Task(task_id=task_id, template_name="dummy.tpl", trigger_rule=TriggerRule.ONE_FAILED)
-        self.error_handler_task = new_task
+
+        if not self.downstream_names:
+            return
+        ok_handler_task_id = self.mapper.name + "_ok"
+        ok_handler = Task(
+            task_id=ok_handler_task_id, template_name="dummy.tpl", trigger_rule=TriggerRule.ONE_SUCCESS
+        )
+        self.ok_handler_task = ok_handler
+        self.relations.append(Relation(from_task_id=self.tasks[-1].task_id, to_task_id=ok_handler_task_id))
 
     @property
     def all_tasks(self):
+        all_tasks = [*self.tasks]
         if self.error_handler_task:
-            return chain(self.tasks, [self.error_handler_task])
-        return self.tasks
+            all_tasks.append(self.error_handler_task)
+        if self.ok_handler_task:
+            all_tasks.append(self.ok_handler_task)
+        return all_tasks
 
     def __repr__(self) -> str:
         return (
