@@ -92,6 +92,6 @@ digraph {
     {% for relation in relations %}
         {{ relation.from_task_id | to_var }} -> {{ relation.to_task_id | to_var }}
         [label="{{ node_relation_label(relation) }}"]
-        [color={{ relation_color(relation) }}]
+        [color=green]
     {% endfor %}
 }
