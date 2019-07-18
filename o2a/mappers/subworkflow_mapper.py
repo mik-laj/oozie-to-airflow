@@ -15,7 +15,7 @@
 """Maps subworkflow of Oozie to Airflow's sub-dag"""
 import logging
 import os
-from typing import Dict, Set, Type, Tuple, List
+from typing import Dict, List, Set, Type
 
 from xml.etree.ElementTree import Element
 
@@ -26,7 +26,11 @@ from o2a.converter.task import Task
 from o2a.definitions import EXAMPLES_PATH
 from o2a.mappers.action_mapper import ActionMapper
 from o2a.o2a_libs.property_utils import PropertySet
-from o2a.utils import el_utils
+from o2a.transformers.base_transformer import BaseWorkflowTransformer
+from o2a.utils import xml_utils
+
+
+TAG_APP = "app-path"
 
 
 # pylint: disable=too-many-instance-attributes
@@ -46,10 +50,17 @@ class SubworkflowMapper(ActionMapper):
         props: PropertySet,
         action_mapper: Dict[str, Type[ActionMapper]],
         renderer: BaseRenderer,
+        transformers: List[BaseWorkflowTransformer] = None,
         **kwargs,
     ):
         ActionMapper.__init__(
-            self, oozie_node=oozie_node, name=name, dag_name=dag_name, props=props, **kwargs
+            self,
+            oozie_node=oozie_node,
+            name=name,
+            dag_name=dag_name,
+            props=props,
+            input_directory_path=input_directory_path,
+            **kwargs,
         )
         self.task_id = name
         self.input_directory_path = input_directory_path
@@ -57,11 +68,11 @@ class SubworkflowMapper(ActionMapper):
         self.dag_name = dag_name
         self.action_mapper = action_mapper
         self.renderer = renderer
+        self.transformers = transformers or []
         self._parse_oozie_node()
 
     def _parse_oozie_node(self):
-        app_path = self.oozie_node.find("app-path").text
-        app_path = el_utils.replace_el_with_var(app_path, props=self.props, quote=False)
+        app_path = xml_utils.get_tag_el_text(self.oozie_node, TAG_APP, self.props)
         _, _, self.app_name = app_path.rpartition("/")
         # TODO: hacky: we should calculate it deriving from input_directory_path and comparing app-path
         # TODO: but for now we assume app is in "examples"
@@ -74,6 +85,7 @@ class SubworkflowMapper(ActionMapper):
             action_mapper=self.action_mapper,
             dag_name=self.app_name,
             initial_props=self.get_child_props(),
+            transformers=self.transformers,
         )
         converter.convert(as_subworkflow=True)
 
@@ -86,7 +98,7 @@ class SubworkflowMapper(ActionMapper):
             self.props if propagate_configuration is not None else PropertySet(config={}, job_properties={})
         )
 
-    def to_tasks_and_relations(self) -> Tuple[List[Task], List[Relation]]:
+    def to_tasks_and_relations(self):
         tasks: List[Task] = [
             Task(task_id=self.name, template_name="subwf.tpl", template_params=dict(app_name=self.app_name))
         ]

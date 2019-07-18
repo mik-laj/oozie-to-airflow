@@ -32,18 +32,10 @@ Table of Contents
   - [Running Unit Tests](#running-unit-tests)
   - [Running all example conversions](#running-all-example-conversions)
   - [Dependency graphs](#dependency-graphs)
+- [Continuous integration environment](#continuous-integration-environment)
 - [Cloud test environment with Dataproc and Composer](#cloud-test-environment-with-dataproc-and-composer)
   - [Cloud environment setup](#cloud-environment-setup)
-    - [Cloud Composer](#cloud-composer)
-    - [Cloud Dataproc Cluster with Oozie](#cloud-dataproc-cluster-with-oozie)
-    - [Creating Dataproc cluster](#creating-dataproc-cluster)
   - [Running system tests](#running-system-tests)
-    - [System tests](#system-tests)
-    - [Caching latest used parameters by run-sys-test](#caching-latest-used-parameters-by-run-sys-test)
-    - [Test phases](#test-phases)
-    - [Test scenarios](#test-scenarios)
-    - [Running system tests with sub-workflows](#running-system-tests-with-sub-workflows)
-    - [Packaging the application and uploading to PyPi](#packaging-the-application-and-uploading-to-pypi)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -115,11 +107,17 @@ In all the example commands below it is assumed that the [bin](bin) directory is
 ## Static code analysis and pre-commit hooks
 
 We are using a number of checks for quality checks of the code. They are verified during Travis build but
-also you can install pre-commit hook by running:
+also you can install:
+
+Pre-commit hook by running:
 
 `pre-commit install`
 
-You can run all the checks manually by running:
+Pre-push hook by running:
+
+`pre-commit install --hook-type pre-push`
+
+You can also run all the checks manually by running:
 
 `pre-commit run --all-files`
 
@@ -155,6 +153,61 @@ The latest dependencies generated:
 
 You can also see dependency cycles in case there are some cycles in
 [o2a-dependency-cycles.png](images/o2a-dependecy-cycles.png)
+
+# Continuous integration environment
+
+The project integrates with Travis CI. To enable saving of the build process artifacts, you must configure the authorization mechanisms for Google Cloud Storage. For this purpose, it is necessary to set two environment variables: `GCP_SERVICE_ACCOUNT`, `GCP_BUCKET_NAME`.
+
+To do this, follow these steps:
+1. To simplify the instructions, set the environment variable:
+```bash
+export PROJECT_ID="$(gcloud config get-value project)"
+export ACCOUNT_NAME=o2a-build-artifacts-travis-ci
+export ACCOUNT_EMAIL="${ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+export BUCKET_NAME=o2a-build-artifacts
+```
+
+2. Create the service account that will be used by Travis
+```bash
+gcloud iam service-accounts create "${ACCOUNT_NAME}"
+```
+
+3. Create a new private key for the service account, and save a copy of it in the `o2a-build-artifacts-sa.json` file.
+```bash
+gcloud iam service-accounts keys create --iam-account "${ACCOUNT_EMAIL}" o2a-build-artifacts-sa.json
+```
+
+4. Create the bucket
+```bash
+gsutil mb "gs://${BUCKET_NAME}"
+```
+
+5. Enables the Bucket Policy Only feature on Cloud Storage bucket
+```bash
+gsutil bucketpolicyonly set on "gs://${BUCKET_NAME}"
+```
+
+6. Grant permission to make a bucket's objects publicly readable:
+```bash
+gsutil iam ch allUsers:objectViewer "gs://${BUCKET_NAME}"
+```
+
+7. Grant permission to create and overwrite a bucket's objects by service account:
+```bash
+gsutil iam ch "serviceAccount:${ACCOUNT_EMAIL}:objectAdmin" "gs://${BUCKET_NAME}"
+```
+
+8. Set environement variable on Travis CI
+```bash
+travis env set GCP_SERVICE_ACCOUNT "$(cat o2a-build-artifacts-sa.json)" --private
+travis env set GCP_BUCKET_NAME "${BUCKET_NAME}" --public
+```
+
+9. Remove a service account from local disk
+```bash
+rm o2a-build-artifacts-sa.json
+```
+
 
 # Cloud test environment with Dataproc and Composer
 
@@ -245,7 +298,7 @@ with `-A` option - this way you do not have to remember all the options.
 Current options:
 
 ```
-Usage: o2a-run-sys-test [FLAGS] [-A|-S]
+Usage: o2a-run-sys-test [FLAGS] [-A|-S|-K|-W]
 
 Executes prepare or run phase for integration testing of O2A converter.
 
@@ -256,10 +309,10 @@ Flags:
 
 -a, --application <APPLICATION>
         Application (from examples dir) to run the tests on. Must be specified unless -S or -A are specified.
-        One of [ childwf decision demo el fs git mapreduce pig shell spark ssh subwf ]
+        One of [childwf decision demo el fs git mapreduce pig shell spark ssh subwf]
 
 -p, --phase <PHASE>
-        Phase of the test to run. One of [ prepare-configuration convert prepare-dataproc test-composer test-oozie ]. Defaults to convert.
+        Phase of the test to run. One of [prepare-configuration convert prepare-dataproc test-composer test-oozie test-compare-artifacts]. Defaults to convert.
 
 -C, --composer-name <COMPOSER_NAME>
         Composer instance used to run the operations on. Defaults to o2a-integration
@@ -279,19 +332,29 @@ Flags:
 -v, --verbose
         Add even more verbosity when running the script.
 
+-d, --dot
+        Creates files in the DOT representation.
+        If you have the graphviz program in PATH, the files will also be converted to the PNG format.
+        If you have the graphviz program and the imgcat programs in PATH, the files will also be displayed in the console
 
 Optional commands to execute:
 
+-K, --ssh-to-composer-worker
+        Open shell access to Airflow's worker. This allows you to test commands in the context of the Airflow instance.
+        It is worth noting that it is possible to access the database.
+        The kubectl exec command is used internally, so not all SSH features are available.
 
--S, --ssh-to-cluster-master
-        SSH to dataproc's cluster master. Arguments after -- are passed to gcloud ssh command as extra args.
+-S, --ssh-to-dataproc-master
+        SSH to Dataproc's cluster master. All SSH features are available by this options.
+        Arguments after -- are passed to gcloud compute ssh command as extra args.
 
--X, --open-oozie-web-ui
-        Creates a SOCKS5 proxy server that redirects traffic through the main Dataproc cluster node and
+-W, --open-oozie-web-ui
+        Creates a SOCKS5 proxy server that redirects traffic through Dataproc's cluster master and
         opens Google Chrome with a proxy configuration and a tab with the Oozie web interface.
 
 -A, --setup-autocomplete
         Sets up autocomplete for o2a-run-sys-tests
+
 ```
 
 ### Caching latest used parameters by run-sys-test
@@ -308,7 +371,8 @@ The following phases are defined for the system tests:
 
 * **prepare-configuration** - prepares configuration based on passed Dataproc/Composer parameters
 
-* **convert** - converts the example application workflow to DAG and stores it in output/<APPLICATION> directory
+* **convert** - converts the example application workflow to DAG and stores it in ``output/<APPLICATION>``
+  directory
 
 * **prepare-dataproc** - prepares Dataproc cluster to execute both Composer and Oozie jobs. The preparation is:
 
@@ -318,9 +382,14 @@ The following phases are defined for the system tests:
 
    * HDFS: /user/${user.name}/examples/apps/<APPLICATION> - the application is stored in this HDFS directory
 
-* **test-composer** - runs tests on Composer instance
+* **test-composer** - runs tests on Composer instance. Artifacts are downloaded to the
+ ``output-artifacts/<APPLICATION>/composer`` directory.
 
-* **test-oozie** - runs tests on Oozie in Hadoop cluster
+* **test-oozie** - runs tests on Oozie in Hadoop cluster. Artifacts are downloaded to the
+  ``output-artifacts/<APPLICATION>/oozie`` directory.
+
+* **test-compare-artifacts** - run tests on Oozie and Composer instance and displays a comparison of artifact
+  differences.
 
 ### Test scenarios
 

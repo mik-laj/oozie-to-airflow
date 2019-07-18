@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Maps Oozie pig node to Airflow's DAG"""
-from typing import Dict, Set, Tuple, List
+from typing import Dict, List, Optional, Set
 from xml.etree.ElementTree import Element
 
 
@@ -22,11 +22,14 @@ from o2a.converter.relation import Relation
 from o2a.mappers.action_mapper import ActionMapper
 from o2a.mappers.extensions.prepare_mapper_extension import PrepareMapperExtension
 from o2a.o2a_libs.property_utils import PropertySet
-from o2a.utils import el_utils, xml_utils
 from o2a.utils.file_archive_extractors import ArchiveExtractor, FileExtractor
 
 
 # pylint: disable=too-many-instance-attributes
+from o2a.utils.param_extractor import extract_param_values_from_action_node
+from o2a.utils.xml_utils import get_tag_el_text
+
+
 class MapReduceMapper(ActionMapper):
     """
     Converts a MapReduce Oozie node to an Airflow task.
@@ -39,29 +42,19 @@ class MapReduceMapper(ActionMapper):
         self.params_dict: Dict[str, str] = {}
         self.file_extractor = FileExtractor(oozie_node=oozie_node, props=self.props)
         self.archive_extractor = ArchiveExtractor(oozie_node=oozie_node, props=self.props)
-        self.name_node = None
-        self.hdfs_files = None
-        self.hdfs_archives = None
+        self.name_node: Optional[str] = None
+        self.hdfs_files: Optional[List[str]] = None
+        self.hdfs_archives: Optional[List[str]] = None
         self.prepare_extension: PrepareMapperExtension = PrepareMapperExtension(self)
 
     def on_parse_node(self):
         super().on_parse_node()
-        name_node_text = self.oozie_node.find("name-node").text
-        self.name_node = el_utils.replace_el_with_var(name_node_text, props=self.props, quote=False)
-        self._parse_params()
+        self.name_node = get_tag_el_text(self.oozie_node, "name-node", props=self.props)
+        self.params_dict = extract_param_values_from_action_node(self.oozie_node, props=self.props)
         _, self.hdfs_files = self.file_extractor.parse_node()
         _, self.hdfs_archives = self.archive_extractor.parse_node()
 
-    def _parse_params(self):
-        param_nodes = xml_utils.find_nodes_by_tag(self.oozie_node, "param")
-        if param_nodes:
-            self.params_dict = {}
-            for node in param_nodes:
-                param = el_utils.replace_el_with_var(node.text, props=self.props, quote=False)
-                key, value = param.split("=", 1)
-                self.params_dict[key] = value
-
-    def to_tasks_and_relations(self) -> Tuple[List[Task], List[Relation]]:
+    def to_tasks_and_relations(self):
         action_task = Task(
             task_id=self.name,
             template_name="mapreduce.tpl",
@@ -83,9 +76,9 @@ class MapReduceMapper(ActionMapper):
     @staticmethod
     def _validate_paths(input_directory_path, output_directory_path):
         if not input_directory_path:
-            raise Exception("The input_directory_path should be set and is {}".format(input_directory_path))
+            raise Exception(f"The input_directory_path should be set and is {input_directory_path}")
         if not output_directory_path:
-            raise Exception("The output_directory_path should be set and is {}".format(output_directory_path))
+            raise Exception(f"The output_directory_path should be set and is {output_directory_path}")
 
     def required_imports(self) -> Set[str]:
         return {"from airflow.utils import dates", "from airflow.contrib.operators import dataproc_operator"}

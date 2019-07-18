@@ -14,16 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 _SHORT_OPTIONS="
-h a: p: C: L: b: c: m: r: z: d: v A S W
+h a: p: C: L: b: c: m: r: z: d: v A S W K
 "
 
-_ALLOWED_PHASES=" prepare-configuration convert prepare-dataproc test-composer test-oozie "
+_ALLOWED_PHASES=" prepare-configuration convert prepare-dataproc test-composer test-oozie compare-artifacts "
 # shellcheck disable=SC2011
-_ALLOWED_APPLICATIONS=" advancedflow childwf decision demo distcp el fs git hive mapreduce pig shell spark ssh subwf "
+_ALLOWED_APPLICATIONS=" advancedflow childwf decision demo distcp el email fs git hive java mapreduce pig shell spark ssh subwf "
 
 _LONG_OPTIONS="
 help application: composer-name: composer-location: phase: bucket: cluster:
-region: verbose dot setup-autocomplete ssh-to-cluster-master open-oozie-web-ui
+region: verbose dot setup-autocomplete ssh-to-dataproc-master open-oozie-web-ui ssh-to-composer-worker
 "
 
 # Note on OSX bash has no associative arrays (Bash 3.2) so we have to fake it

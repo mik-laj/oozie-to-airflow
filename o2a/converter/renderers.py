@@ -106,6 +106,10 @@ class PythonRenderer(BaseRenderer):
         converted_job_properties: Dict[str, Union[List[str], str]] = {
             key: comma_separated_string_to_list(value) for key, value in props.job_properties.items()
         }
+        task_map = {
+            task_group.name: [task.task_id for task in task_group.tasks]
+            for task_group in workflow.task_groups.values()
+        }
         content = render_template(
             template_name=template_name,
             dag_name=workflow.dag_name,
@@ -113,9 +117,10 @@ class PythonRenderer(BaseRenderer):
             start_days_ago=self.start_days_ago,
             job_properties=converted_job_properties,
             config=props.config,
-            relations=workflow.relations,
-            nodes=list(workflow.nodes.values()),
+            relations=workflow.task_group_relations,
+            task_groups=list(workflow.task_groups.values()),
             dependencies=workflow.dependencies,
+            task_map=task_map,
         )
         return content
 
@@ -181,7 +186,7 @@ class DotRenderer(BaseRenderer):
         content = render_template(
             dag_name=workflow.dag_name,
             template_name=template_name,
-            relations=workflow.relations,
-            nodes=list(workflow.nodes.values()),
+            relations=workflow.task_group_relations,
+            task_groups=list(workflow.task_groups.values()),
         )
         return content

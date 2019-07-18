@@ -14,17 +14,20 @@
 # limitations under the License.
 """Dummy Mapper that is used as temporary solution while we are implementing the real mappers.
 """
-from typing import List, Optional, Set, Tuple
+from typing import List, Optional, Set
 from xml.etree.ElementTree import Element
 
 from o2a.converter.relation import Relation
 from o2a.converter.task import Task
-from o2a.mappers.action_mapper import ActionMapper
+from o2a.mappers.base_mapper import BaseMapper
 from o2a.o2a_libs.property_utils import PropertySet
 
 
-class DummyMapper(ActionMapper):
-    """Dummy mapper used in place of not-yet-implemented mappers """
+class DummyMapper(BaseMapper):
+    """Dummy mapper. It always returns one tasks that does nothing.
+
+    It's used in place of not-yet-implemented mappers and as the base class for control nodes.
+    """
 
     def __init__(
         self, oozie_node: Element, name: str, dag_name: str, props: Optional[PropertySet] = None, **kwargs
@@ -37,7 +40,7 @@ class DummyMapper(ActionMapper):
             **kwargs,
         )
 
-    def to_tasks_and_relations(self) -> Tuple[List[Task], List[Relation]]:
+    def to_tasks_and_relations(self):
         tasks: List[Task] = [Task(task_id=self.name, template_name="dummy.tpl")]
         relations: List[Relation] = []
         return tasks, relations

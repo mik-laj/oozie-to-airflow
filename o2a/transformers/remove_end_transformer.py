@@ -27,7 +27,7 @@ class RemoveEndTransformer(BaseWorkflowTransformer):
     Remove End nodes with all relations when it's not connected to Decision Node.
     """
 
-    def process_workflow(self, workflow: Workflow):
+    def process_workflow_after_parse_workflow_xml(self, workflow: Workflow):
         decision_nodes = workflow.get_nodes_by_type(DecisionMapper)
         decision_node_names = {node.name for node in decision_nodes}
         end_nodes = workflow.get_nodes_by_type(EndMapper)
@@ -35,7 +35,7 @@ class RemoveEndTransformer(BaseWorkflowTransformer):
         for end_node in end_nodes:
             upstream_nodes = workflow.find_upstream_nodes(end_node)
             upstream_node_names = {node.name for node in upstream_nodes}
-            print(upstream_node_names)
+
             if not decision_node_names.intersection(upstream_node_names):
                 workflow.remove_node(end_node)
             else:

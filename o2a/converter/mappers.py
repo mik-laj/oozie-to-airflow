@@ -23,7 +23,8 @@ from typing import Type, Dict
 
 from o2a.mappers.distcp_mapper import DistCpMapper
 from o2a.mappers.action_mapper import ActionMapper
-from o2a.mappers.dummy_mapper import DummyMapper
+from o2a.mappers.java_mapper import JavaMapper
+from o2a.mappers.email_mapper import EmailMapper
 from o2a.mappers.fs_mapper import FsMapper
 from o2a.mappers.git_mapper import GitMapper
 from o2a.mappers.hive_mapper import HiveMapper
@@ -35,11 +36,11 @@ from o2a.mappers.ssh_mapper import SSHMapper
 from o2a.mappers.subworkflow_mapper import SubworkflowMapper
 
 ACTION_MAP: Dict[str, Type[ActionMapper]] = {
-    "unknown": DummyMapper,
     "ssh": SSHMapper,
     "spark": SparkMapper,
     "pig": PigMapper,
     "fs": FsMapper,
+    "java": JavaMapper,
     "sub-workflow": SubworkflowMapper,
     "shell": ShellMapper,
     "map-reduce": MapReduceMapper,
@@ -47,4 +48,5 @@ ACTION_MAP: Dict[str, Type[ActionMapper]] = {
     "hive": HiveMapper,
     "hive2": HiveMapper,
     "distcp": DistCpMapper,
+    "email": EmailMapper,
 }

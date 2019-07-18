@@ -18,7 +18,7 @@ Remove End Transformer tests
 import unittest
 from unittest import mock
 
-from o2a.converter.parsed_action_node import ParsedActionNode
+from o2a.converter.oozie_node import OozieNode
 from o2a.converter.task import Task
 from o2a.converter.workflow import Workflow
 
@@ -39,14 +39,14 @@ class RemoveEndTransformerTest(unittest.TestCase):
         end_mapper = mock.Mock(spec=EndMapper)
         end_mapper.name = "second_task"
 
-        first_node = ParsedActionNode(mapper=first_mapper)
-        end_node = ParsedActionNode(mapper=end_mapper)
+        first_node = OozieNode(mapper=first_mapper)
+        end_node = OozieNode(mapper=end_mapper)
         first_node.downstream_names = [end_node.name]
 
         workflow.nodes[first_mapper.name] = first_node
         workflow.nodes[end_mapper.name] = end_node
 
-        transformer.process_workflow(workflow)
+        transformer.process_workflow_after_parse_workflow_xml(workflow)
 
         self.assertEqual({first_mapper.name}, set(workflow.nodes.keys()))
         self.assertEqual([], first_node.downstream_names)
@@ -63,18 +63,16 @@ class RemoveEndTransformerTest(unittest.TestCase):
         end_mapper = mock.Mock(spec=EndMapper)
         end_mapper.name = "end_task"
 
-        decision_node = ParsedActionNode(
-            mapper=decision_mapper, tasks=[self._get_dummy_task(decision_mapper.name)]
-        )
-        second_node = ParsedActionNode(mapper=second_mapper, tasks=[self._get_dummy_task(second_mapper.name)])
-        end_node = ParsedActionNode(mapper=end_mapper, tasks=[self._get_dummy_task(end_mapper.name)])
+        decision_node = OozieNode(mapper=decision_mapper, tasks=[self._get_dummy_task(decision_mapper.name)])
+        second_node = OozieNode(mapper=second_mapper, tasks=[self._get_dummy_task(second_mapper.name)])
+        end_node = OozieNode(mapper=end_mapper, tasks=[self._get_dummy_task(end_mapper.name)])
         decision_node.downstream_names = [second_mapper.name, end_mapper.name]
 
         workflow.nodes[decision_mapper.name] = decision_node
         workflow.nodes[second_mapper.name] = second_node
         workflow.nodes[end_mapper.name] = end_node
 
-        transformer.process_workflow(workflow)
+        transformer.process_workflow_after_parse_workflow_xml(workflow)
 
         self.assertEqual(
             {decision_mapper.name, second_mapper.name, end_mapper.name}, set(workflow.nodes.keys())

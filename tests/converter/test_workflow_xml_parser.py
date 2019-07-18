@@ -12,9 +12,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests oozie parser"""
+"""Tests workflow xml parser"""
 from os import path
-from typing import NamedTuple, Set, Dict
+from typing import Dict, List, NamedTuple, Optional
 
 import unittest
 from unittest import mock
@@ -22,7 +22,7 @@ from xml.etree import ElementTree as ET
 
 from parameterized import parameterized
 
-from o2a.converter import parser
+from o2a.converter import workflow_xml_parser
 from o2a.converter.mappers import ACTION_MAP
 from o2a.converter.workflow import Workflow
 
@@ -33,13 +33,13 @@ from o2a.mappers import ssh_mapper
 from o2a.o2a_libs.property_utils import PropertySet
 
 
-class TestOozieParser(unittest.TestCase):
+class TestWorkflowXmlParser(unittest.TestCase):
     def setUp(self):
         props = PropertySet(job_properties={}, config={})
         workflow = Workflow(
             input_directory_path=EXAMPLE_DEMO_PATH, output_directory_path="/tmp", dag_name="DAG_NAME_B"
         )
-        self.parser = parser.OozieParser(
+        self.parser = workflow_xml_parser.WorkflowXmlParser(
             workflow=workflow, props=props, action_mapper=ACTION_MAP, renderer=mock.MagicMock()
         )
 
@@ -72,7 +72,7 @@ class TestOozieParser(unittest.TestCase):
         on_parse_node_mock.assert_called_once_with()
 
     @mock.patch("o2a.mappers.dummy_mapper.DummyMapper.on_parse_node", wraps=None)
-    @mock.patch("o2a.converter.parser.OozieParser.parse_node")
+    @mock.patch("o2a.converter.workflow_xml_parser.WorkflowXmlParser.parse_node")
     def test_parse_fork_node(self, parse_node_mock, on_parse_node_mock):
         node_name = "fork_name"
         # language=XML
@@ -93,7 +93,7 @@ class TestOozieParser(unittest.TestCase):
         node1, node2 = root.findall("action")[0:2]
         self.parser.parse_fork_node(root, fork)
         node = self.parser.workflow.nodes[node_name]
-        self.assertEqual(["task1", "task2"], node.get_downstreams())
+        self.assertEqual(["task1", "task2"], node.downstream_names)
         self.assertIn(node_name, self.parser.workflow.nodes)
         parse_node_mock.assert_any_call(root, node1)
         parse_node_mock.assert_any_call(root, node2)
@@ -111,7 +111,7 @@ class TestOozieParser(unittest.TestCase):
 
         node = self.parser.workflow.nodes[node_name]
         self.assertIn(node_name, self.parser.workflow.nodes)
-        self.assertEqual([end_name], node.get_downstreams())
+        self.assertEqual([end_name], node.downstream_names)
 
         on_parse_node_mock.assert_called_once_with()
 
@@ -133,7 +133,7 @@ class TestOozieParser(unittest.TestCase):
 
         p_op = self.parser.workflow.nodes[node_name]
         self.assertIn(node_name, self.parser.workflow.nodes)
-        self.assertEqual(["down1", "down2", "end1"], p_op.get_downstreams())
+        self.assertEqual(["down1", "down2", "end1"], p_op.downstream_names)
 
         on_parse_node_mock.assert_called_once_with()
 
@@ -150,7 +150,7 @@ class TestOozieParser(unittest.TestCase):
 
         p_op = self.parser.workflow.nodes[node_name]
         self.assertIn(node_name, self.parser.workflow.nodes)
-        self.assertEqual([end_name], p_op.get_downstreams())
+        self.assertEqual([end_name], p_op.downstream_names)
 
         on_parse_node_mock.assert_called_once_with()
 
@@ -177,8 +177,8 @@ class TestOozieParser(unittest.TestCase):
 
         p_op = self.parser.workflow.nodes[node_name]
         self.assertIn(node_name, self.parser.workflow.nodes)
-        self.assertEqual(["end1"], p_op.get_downstreams())
-        self.assertEqual("fail1", p_op.get_error_downstream_name())
+        self.assertEqual(["end1"], p_op.downstream_names)
+        self.assertEqual("fail1", p_op.error_downstream_name)
 
         on_parse_node_mock.assert_called_once_with()
 
@@ -205,8 +205,8 @@ class TestOozieParser(unittest.TestCase):
 
         p_op = self.parser.workflow.nodes[node_name]
         self.assertIn(node_name, self.parser.workflow.nodes)
-        self.assertEqual(["end1"], p_op.get_downstreams())
-        self.assertEqual("fail1", p_op.get_error_downstream_name())
+        self.assertEqual(["end1"], p_op.downstream_names)
+        self.assertEqual("fail1", p_op.error_downstream_name)
         self.assertEqual(["myNameNode/test_dir/test.txt#test_link.txt"], p_op.mapper.hdfs_files)
         self.assertEqual(["myNameNode/test_dir/test2.zip#test_zip_dir"], p_op.mapper.hdfs_archives)
 
@@ -231,8 +231,8 @@ class TestOozieParser(unittest.TestCase):
         self.parser.parse_action_node(action_node)
         self.assertIn(node_name, self.parser.workflow.nodes)
         mr_node = self.parser.workflow.nodes[node_name]
-        self.assertEqual(["end"], mr_node.get_downstreams())
-        self.assertEqual("fail", mr_node.get_error_downstream_name())
+        self.assertEqual(["end"], mr_node.downstream_names)
+        self.assertEqual("fail", mr_node.error_downstream_name)
 
     @mock.patch("o2a.mappers.dummy_mapper.DummyMapper.on_parse_node", wraps=None)
     def test_parse_action_node_unknown(self, on_parse_node_mock):
@@ -256,54 +256,54 @@ class TestOozieParser(unittest.TestCase):
 
         p_op = self.parser.workflow.nodes[node_name]
         self.assertIn(node_name, self.parser.workflow.nodes)
-        self.assertEqual(["end1"], p_op.get_downstreams())
-        self.assertEqual("fail1", p_op.get_error_downstream_name())
+        self.assertEqual(["end1"], p_op.downstream_names)
+        self.assertEqual("fail1", p_op.error_downstream_name)
 
         on_parse_node_mock.assert_called_once_with()
 
-    @mock.patch("o2a.converter.parser.OozieParser.parse_action_node")
+    @mock.patch("o2a.converter.workflow_xml_parser.WorkflowXmlParser.parse_action_node")
     def test_parse_node_action(self, action_mock):
         root = ET.Element("root")
         action = ET.SubElement(root, "action", attrib={"name": "test_name"})
         self.parser.parse_node(root, action)
         action_mock.assert_called_once_with(action)
 
-    @mock.patch("o2a.converter.parser.OozieParser.parse_start_node")
+    @mock.patch("o2a.converter.workflow_xml_parser.WorkflowXmlParser.parse_start_node")
     def test_parse_node_start(self, start_mock):
         root = ET.Element("root")
         start = ET.SubElement(root, "start", attrib={"name": "test_name"})
         self.parser.parse_node(root, start)
         start_mock.assert_called_once_with(start)
 
-    @mock.patch("o2a.converter.parser.OozieParser.parse_kill_node")
+    @mock.patch("o2a.converter.workflow_xml_parser.WorkflowXmlParser.parse_kill_node")
     def test_parse_node_kill(self, kill_mock):
         root = ET.Element("root")
         kill = ET.SubElement(root, "kill", attrib={"name": "test_name"})
         self.parser.parse_node(root, kill)
         kill_mock.assert_called_once_with(kill)
 
-    @mock.patch("o2a.converter.parser.OozieParser.parse_end_node")
+    @mock.patch("o2a.converter.workflow_xml_parser.WorkflowXmlParser.parse_end_node")
     def test_parse_node_end(self, end_mock):
         root = ET.Element("root")
         end = ET.SubElement(root, "end", attrib={"name": "test_name"})
         self.parser.parse_node(root, end)
         end_mock.assert_called_once_with(end)
 
-    @mock.patch("o2a.converter.parser.OozieParser.parse_fork_node")
+    @mock.patch("o2a.converter.workflow_xml_parser.WorkflowXmlParser.parse_fork_node")
     def test_parse_node_fork(self, fork_mock):
         root = ET.Element("root")
         fork = ET.SubElement(root, "fork", attrib={"name": "test_name"})
         self.parser.parse_node(root, fork)
         fork_mock.assert_called_once_with(root, fork)
 
-    @mock.patch("o2a.converter.parser.OozieParser.parse_join_node")
+    @mock.patch("o2a.converter.workflow_xml_parser.WorkflowXmlParser.parse_join_node")
     def test_parse_node_join(self, join_mock):
         root = ET.Element("root")
         join = ET.SubElement(root, "join", attrib={"name": "test_name"})
         self.parser.parse_node(root, join)
         join_mock.assert_called_once_with(join)
 
-    @mock.patch("o2a.converter.parser.OozieParser.parse_decision_node")
+    @mock.patch("o2a.converter.workflow_xml_parser.WorkflowXmlParser.parse_decision_node")
     def test_parse_node_decision(self, decision_mock):
         root = ET.Element("root")
         decision = ET.SubElement(root, "decision", attrib={"name": "test_name"})
@@ -311,9 +311,14 @@ class TestOozieParser(unittest.TestCase):
         decision_mock.assert_called_once_with(decision)
 
 
-class WorkflowTestCase(NamedTuple):
+class NodeExpectedResult(NamedTuple):
+    downstream_names: List[str]
+    error_xml: Optional[str] = None
+
+
+class WorkflowExpectedResult(NamedTuple):
     name: str
-    node_names: Set[str]
+    nodes: Dict[str, NodeExpectedResult]
     job_properties: Dict[str, str]
     config: Dict[str, str]
 
@@ -322,112 +327,190 @@ class TestOozieExamples(unittest.TestCase):
     @parameterized.expand(
         [
             (
-                WorkflowTestCase(
+                WorkflowExpectedResult(
                     name="decision",
-                    node_names={"start_node_1234", "decision-node", "first", "end", "kill"},
-                    job_properties={"nameNode": "hdfs://"},
-                    config={},
-                ),
-            ),
-            (
-                WorkflowTestCase(
-                    name="demo",
-                    node_names={
-                        "start_node_1234",
-                        "fork-node",
-                        "pig-node",
-                        "subworkflow-node",
-                        "shell-node",
-                        "join-node",
-                        "decision-node",
-                        "hdfs-node",
-                        "end",
-                        "fail",
+                    nodes={
+                        "decision-node": NodeExpectedResult(downstream_names=["first", "end", "kill"]),
+                        "kill": NodeExpectedResult(downstream_names=[]),
+                        "end": NodeExpectedResult(downstream_names=[]),
+                        "start_node_1234": NodeExpectedResult(downstream_names=["decision-node"]),
+                        "first": NodeExpectedResult(downstream_names=["end"], error_xml="end"),
                     },
                     job_properties={"nameNode": "hdfs://"},
                     config={},
                 ),
             ),
             (
-                WorkflowTestCase(
+                WorkflowExpectedResult(
+                    name="demo",
+                    nodes={
+                        "start_node_1234": NodeExpectedResult(downstream_names=["fork-node"]),
+                        "fork-node": NodeExpectedResult(
+                            downstream_names=["pig-node", "subworkflow-node", "shell-node"]
+                        ),
+                        "pig-node": NodeExpectedResult(downstream_names=["join-node"], error_xml="fail"),
+                        "subworkflow-node": NodeExpectedResult(
+                            downstream_names=["join-node"], error_xml="fail"
+                        ),
+                        "shell-node": NodeExpectedResult(downstream_names=["join-node"], error_xml="fail"),
+                        "join-node": NodeExpectedResult(downstream_names=["decision-node"]),
+                        "decision-node": NodeExpectedResult(downstream_names=["hdfs-node", "end"]),
+                        "hdfs-node": NodeExpectedResult(downstream_names=["end"], error_xml="fail"),
+                        "end": NodeExpectedResult(downstream_names=[]),
+                        "fail": NodeExpectedResult(downstream_names=[]),
+                    },
+                    job_properties={"nameNode": "hdfs://"},
+                    config={},
+                ),
+            ),
+            (
+                WorkflowExpectedResult(
                     name="el",
-                    node_names={"start_node_1234", "ssh", "end", "fail"},
+                    nodes={
+                        "start_node_1234": NodeExpectedResult(downstream_names=["ssh"]),
+                        "ssh": NodeExpectedResult(downstream_names=["end"], error_xml="fail"),
+                        "end": NodeExpectedResult(downstream_names=[]),
+                        "fail": NodeExpectedResult(downstream_names=[]),
+                    },
                     job_properties={"hostname": "user@BBB", "nameNode": "hdfs://"},
                     config={},
                 ),
             ),
             (
-                WorkflowTestCase(
+                WorkflowExpectedResult(
+                    name="email",
+                    nodes={
+                        "start_node_1234": NodeExpectedResult(downstream_names=["email-node"]),
+                        "email-node": NodeExpectedResult(downstream_names=["end"], error_xml="fail"),
+                        "end": NodeExpectedResult(downstream_names=[]),
+                        "fail": NodeExpectedResult(downstream_names=[]),
+                    },
+                    job_properties={"hostname": "user@BBB", "nameNode": "hdfs://"},
+                    config={},
+                ),
+            ),
+            (
+                WorkflowExpectedResult(
                     name="fs",
-                    node_names={
-                        "start_node_1234",
-                        "end",
-                        "fail",
-                        "chmod",
-                        "mkdir",
-                        "fs-node",
-                        "delete",
-                        "move",
-                        "touchz",
-                        "chgrp",
-                        "join",
+                    nodes={
+                        "start_node_1234": NodeExpectedResult(downstream_names=["fs-node"]),
+                        "end": NodeExpectedResult(downstream_names=[]),
+                        "fail": NodeExpectedResult(downstream_names=[]),
+                        "chmod": NodeExpectedResult(downstream_names=["join"], error_xml="fail"),
+                        "mkdir": NodeExpectedResult(downstream_names=["join"], error_xml="fail"),
+                        "delete": NodeExpectedResult(downstream_names=["join"], error_xml="fail"),
+                        "move": NodeExpectedResult(downstream_names=["join"], error_xml="fail"),
+                        "touchz": NodeExpectedResult(downstream_names=["join"], error_xml="fail"),
+                        "chgrp": NodeExpectedResult(downstream_names=["join"], error_xml="fail"),
+                        "join": NodeExpectedResult(downstream_names=["end"]),
+                        "fs-node": NodeExpectedResult(
+                            downstream_names=["mkdir", "delete", "move", "chmod", "touchz", "chgrp"]
+                        ),
                     },
                     job_properties={"hostname": "user@BBB", "nameNode": "hdfs://localhost:8020/"},
                     config={},
                 ),
             ),
             (
-                WorkflowTestCase(
+                WorkflowExpectedResult(
                     name="mapreduce",
-                    node_names={"start_node_1234", "end", "fail", "mr-node"},
+                    nodes={
+                        "start_node_1234": NodeExpectedResult(downstream_names=["mr-node"]),
+                        "end": NodeExpectedResult(downstream_names=[]),
+                        "fail": NodeExpectedResult(downstream_names=[]),
+                        "mr-node": NodeExpectedResult(downstream_names=["end"], error_xml="fail"),
+                    },
                     job_properties={"dataproc_cluster": "A", "nameNode": "hdfs://"},
                     config={"gcp_region": "B"},
                 ),
             ),
             (
-                WorkflowTestCase(
+                WorkflowExpectedResult(
                     name="pig",
-                    node_names={"start_node_1234", "end", "fail", "pig-node"},
+                    nodes={
+                        "start_node_1234": NodeExpectedResult(downstream_names=["pig-node"]),
+                        "end": NodeExpectedResult(downstream_names=[]),
+                        "fail": NodeExpectedResult(downstream_names=[]),
+                        "pig-node": NodeExpectedResult(downstream_names=["end"], error_xml="fail"),
+                    },
                     job_properties={"oozie.wf.application.path": "hdfs://", "nameNode": "hdfs://"},
                     config={},
                 ),
             ),
             (
-                WorkflowTestCase(
+                WorkflowExpectedResult(
+                    name="java",
+                    nodes={
+                        "start_node_1234": NodeExpectedResult(downstream_names=["java-node"]),
+                        "end": NodeExpectedResult(downstream_names=[]),
+                        "fail": NodeExpectedResult(downstream_names=[]),
+                        "java-node": NodeExpectedResult(downstream_names=["end"], error_xml="fail"),
+                    },
+                    job_properties={"oozie.wf.application.path": "hdfs://", "nameNode": "hdfs://"},
+                    config={},
+                ),
+            ),
+            (
+                WorkflowExpectedResult(
                     name="shell",
-                    node_names={"start_node_1234", "end", "fail", "shell-node"},
+                    nodes={
+                        "start_node_1234": NodeExpectedResult(downstream_names=["shell-node"]),
+                        "end": NodeExpectedResult(downstream_names=[]),
+                        "fail": NodeExpectedResult(downstream_names=[]),
+                        "shell-node": NodeExpectedResult(downstream_names=["end"], error_xml="fail"),
+                    },
                     job_properties={"nameNode": "hdfs://"},
                     config={},
                 ),
             ),
             (
-                WorkflowTestCase(
+                WorkflowExpectedResult(
                     name="spark",
-                    node_names={"start_node_1234", "end", "fail", "spark-node"},
+                    nodes={
+                        "start_node_1234": NodeExpectedResult(downstream_names=["spark-node"]),
+                        "end": NodeExpectedResult(downstream_names=[]),
+                        "fail": NodeExpectedResult(downstream_names=[]),
+                        "spark-node": NodeExpectedResult(downstream_names=["end"], error_xml="fail"),
+                    },
                     job_properties={"nameNode": "hdfs://"},
                     config={"dataproc_cluster": "A", "gcp_region": "B"},
                 ),
             ),
             (
-                WorkflowTestCase(
+                WorkflowExpectedResult(
                     name="ssh",
-                    node_names={"start_node_1234", "end", "fail", "ssh"},
+                    nodes={
+                        "start_node_1234": NodeExpectedResult(downstream_names=["ssh"]),
+                        "end": NodeExpectedResult(downstream_names=[]),
+                        "fail": NodeExpectedResult(downstream_names=[]),
+                        "ssh": NodeExpectedResult(downstream_names=["end"], error_xml="fail"),
+                    },
                     job_properties={"hostname": "user@BBB", "nameNode": "hdfs://"},
                     config={},
                 ),
             ),
             (
-                WorkflowTestCase(
+                WorkflowExpectedResult(
                     name="subwf",
-                    node_names={"start_node_1234", "end", "fail", "subworkflow-node"},
+                    nodes={
+                        "start_node_1234": NodeExpectedResult(downstream_names=["subworkflow-node"]),
+                        "end": NodeExpectedResult(downstream_names=[]),
+                        "fail": NodeExpectedResult(downstream_names=[]),
+                        "subworkflow-node": NodeExpectedResult(downstream_names=["end"], error_xml="fail"),
+                    },
                     job_properties={},
                     config={},
                 ),
             ),
             (
-                WorkflowTestCase(
+                WorkflowExpectedResult(
                     name="distcp",
-                    node_names={"start_node_1234", "end", "fail", "distcp-node"},
+                    nodes={
+                        "start_node_1234": NodeExpectedResult(downstream_names=["distcp-node"]),
+                        "end": NodeExpectedResult(downstream_names=[]),
+                        "fail": NodeExpectedResult(downstream_names=[]),
+                        "distcp-node": NodeExpectedResult(downstream_names=["end"], error_xml="fail"),
+                    },
                     job_properties={
                         "hostname": "AAAA@BBB",
                         "nameNode": "hdfs://",
@@ -441,18 +524,22 @@ class TestOozieExamples(unittest.TestCase):
         name_func=lambda func, num, p: f"{func.__name__}_{num}_{p.args[0].name}",
     )
     @mock.patch("uuid.uuid4", return_value="1234")
-    def test_parse_workflow_examples(self, case: WorkflowTestCase, _):
+    def test_parse_workflow_examples(self, case: WorkflowExpectedResult, _):
         workflow = Workflow(
             input_directory_path=path.join(EXAMPLES_PATH, case.name),
             output_directory_path="/tmp",
             dag_name="DAG_NAME_B",
         )
-        current_parser = parser.OozieParser(
+        current_parser = workflow_xml_parser.WorkflowXmlParser(
             workflow=workflow,
             props=PropertySet(job_properties=case.job_properties, config=case.config),
             action_mapper=ACTION_MAP,
             renderer=mock.MagicMock(),
         )
+
         current_parser.parse_workflow()
-        self.assertEqual(case.node_names, set(current_parser.workflow.nodes.keys()))
-        self.assertEqual(set(), current_parser.workflow.relations)
+        self.assertEqual(case.nodes.keys(), set(current_parser.workflow.nodes.keys()))
+        for node_name, expected_node in case.nodes.items():
+            node = workflow.nodes[node_name]
+            self.assertEqual(expected_node.downstream_names, node.downstream_names)
+            self.assertEqual(expected_node.error_xml, node.error_downstream_name)
